@@ -21,7 +21,7 @@ use super::assistant::{
     agent_identifier, check_member,
 };
 use super::types::{Access, ApiError, ApiKey, PutAssistantRequest, ReplyStyle};
-use super::upstream::UpstreamFailure;
+use super::upstream::{KeyNotPermitted, UpstreamFailure};
 use super::{ApiState, MAX_BODY_BYTES, handle};
 use crate::agent::provider::openai_compat;
 use crate::agent::{AgentDefinition, AgentPurpose, PublicIdentifier};
@@ -966,6 +966,16 @@ async fn failed_pings_save_nothing_and_say_why() {
             UpstreamFailure::InvalidApiKey { status: 401 },
             StatusCode::UNPROCESSABLE_ENTITY,
             "VD_INVALID_API_KEY",
+        ),
+        (
+            UpstreamFailure::KeyNotPermitted(KeyNotPermitted::MissingVibeDevSignature),
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "VD_KEY_NOT_PERMITTED",
+        ),
+        (
+            UpstreamFailure::KeyNotPermitted(KeyNotPermitted::GroupPublicApiAccessDisabled),
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "VD_KEY_NOT_PERMITTED",
         ),
         (
             UpstreamFailure::ModelNotFound { status: 404 },

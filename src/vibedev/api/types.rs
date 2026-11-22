@@ -229,6 +229,25 @@ impl ApiError {
         )
     }
 
+    pub fn key_not_permitted(reason: super::upstream::KeyNotPermitted) -> Self {
+        use super::upstream::KeyNotPermitted;
+
+        let explanation = match reason {
+            KeyNotPermitted::MissingVibeDevSignature => {
+                "This API key only works with a VibeDev signature, so it cannot be used by third-party applications like this bot"
+            }
+            KeyNotPermitted::GroupPublicApiAccessDisabled => {
+                "The group this API key belongs to does not allow public API access"
+            }
+        };
+
+        Self::new(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "VD_KEY_NOT_PERMITTED",
+            format!("{explanation} ({})", reason.code()),
+        )
+    }
+
     pub fn model_not_found(status: u16) -> Self {
         Self::new(
             StatusCode::UNPROCESSABLE_ENTITY,

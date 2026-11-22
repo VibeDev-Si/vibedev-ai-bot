@@ -107,6 +107,7 @@ When updating the bot, refer to the [GitHub releases](https://github.com/etkecc/
     - `agent details-revealing-secrets` 对所有人（包括管理员）禁用，只回复一条说明（挂接点：[`controller/agent/details/mod.rs`](./src/controller/agent/details/mod.rs)）。`agent details` 照常可用，Key 显示为 `REDACTED`。
     - 智能体出错时发到群里的错误信息会把已登记的 Key 打码（服务商的错误信息可能带着 Key）（挂接点：[`strings/agent.rs`](./src/strings/agent.rs)）。
     - 影响：任何人都无法在聊天里查看任何智能体（包括全局、静态智能体）的 Key；上游建议的「先 `details-revealing-secrets` 再删除重建」来修改智能体配置的做法不再可行，重建时要自己重新填 Key；AI 助手的 Key 只能在设置页重新填写来更换。帮助文字里仍列出这个命令，但执行会被拒绝。
+12. **区分「Key 不允许第三方使用」**（2026-11-23 补充）：VibeDev 网关对不能用于第三方应用的 Key 返回的两种错误（401 + `MISSING_VIBEDEV_SIGNATURE`，403 + `GROUP_PUBLIC_API_ACCESS_DISABLED`）在试连和取模型列表时单独报成 `422 VD_KEY_NOT_PERMITTED`，不再归为 `VD_INVALID_API_KEY`（见错误码表）。挂接点：[`openai_compat/utils.rs`](./src/agent/provider/openai_compat/utils.rs) 的 `error_from_body` 返回带状态码和识别结果的错误（显示的文字不变）。
 
 部署材料：配置样例 [`etc/vibedev/config.sample.yml`](./etc/vibedev/config.sample.yml)，密钥环境变量样例 [`etc/vibedev/secrets.env.example`](./etc/vibedev/secrets.env.example)（都只有占位符）。
 
@@ -217,7 +218,8 @@ When updating the bot, refer to the [GitHub releases](https://github.com/etkecc/
 | 401 | `VD_UNAUTHORIZED` | 缺少或错误的共享密钥 |
 | 403 | `VD_FORBIDDEN` | `acting_user` 不是群管理员（不是已加入成员，或权力级别不足 100） |
 | 409 | `VD_BOT_NOT_IN_ROOM` | 机器人不在群里 |
-| 422 | `VD_INVALID_API_KEY` | 模型服务返回 401 或 403（或 4xx 且说明 Key 无效） |
+| 422 | `VD_INVALID_API_KEY` | 模型服务返回 401 或 403（或 4xx 且说明 Key 无效）；下一行的两种情况除外 |
+| 422 | `VD_KEY_NOT_PERMITTED` | Key 有效，但 VibeDev 网关不允许第三方应用使用：返回 401 且响应体里有 `MISSING_VIBEDEV_SIGNATURE`（这类 Key 必须带 VibeDev 签名），或返回 403 且响应体里有 `GROUP_PUBLIC_API_ACCESS_DISABLED`（Key 所在分组不允许公开 API 使用）。`error` 里的英文说明写明是哪一种（并带上这个代码），不转出响应正文 |
 | 422 | `VD_MODEL_NOT_FOUND` | 模型不存在（模型服务返回 4xx 且说明模型不存在） |
 | 500 | `VD_INTERNAL` | 读写机器人配置或群状态失败 |
 | 502 | `VD_UPSTREAM_ERROR` | 模型服务出错、连不上，或返回的不是 OpenAI 格式 |
@@ -268,7 +270,8 @@ When updating the bot, refer to the [GitHub releases](https://github.com/etkecc/
 - 管理员列表因为上游的启动检查不能为空，只能填一个不可能存在的账号来达到同样效果。
 - 内部接口本身没有 TLS 和限流，依赖内网隔离和共享密钥。
 - 群管理员身份读自机器人同步到的群状态，可能比实际变化晚几秒。
-- 「模型不存在」和「Key 无效」（非 401/403 时）是根据模型服务错误说明里的关键词判断的，判断不了时归为 `VD_UPSTREAM_ERROR`。
+- 「模型不存在」和「Key 无效」（非 401/403 时）是根据模型服务错误说明里的关键词判断的，判断不了时归为 `VD_UPSTREAM_ERROR`；`VD_KEY_NOT_PERMITTED` 是根据状态码加响应体里的 `MISSING_VIBEDEV_SIGNATURE` / `GROUP_PUBLIC_API_ACCESS_DISABLED`（不区分大小写）判断的，网关换了代码就会回到 `VD_INVALID_API_KEY`。
+- 为了在试连时看到这两个代码，上游 openai-compatible 提供者构造错误的函数（[`openai_compat/utils.rs`](./src/agent/provider/openai_compat/utils.rs) 的 `error_from_body`）改为返回一个带状态码和识别结果的错误类型；显示出来的文字和以前完全一样，响应正文不保存。
 - VibeDev 智能体的请求不走代理（代理会自己解析域名，无法防内网访问），机器人所在环境需要能直连公网。
 - 图片说明文字（caption）的显示取决于客户端是否支持 Matrix v1.10 的媒体说明；不支持时它作为图片名显示。
 - 修改标识文字后，历史消息里的旧标识不会在上下文里被去掉。

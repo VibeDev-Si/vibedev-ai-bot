@@ -204,12 +204,16 @@ pub(super) async fn error_from_response(api: &str, response: reqwest::Response) 
 pub(super) fn error_from_body(api: &str, status: reqwest::StatusCode, body: &str) -> anyhow::Error {
     tracing::warn!(%status, body, "OpenAI-compat {api} request failed");
 
-    match error_message_from_body(body) {
+    let message = match error_message_from_body(body) {
         Some(message) => {
-            anyhow::anyhow!("The OpenAI-compat {api} API request failed ({status}): {message}")
+            format!("The OpenAI-compat {api} API request failed ({status}): {message}")
         }
-        None => anyhow::anyhow!("The OpenAI-compat {api} API request failed ({status})"),
-    }
+        None => format!("The OpenAI-compat {api} API request failed ({status})"),
+    };
+
+    // VibeDev fork: shows the same, but keeps the status (and the VibeDev gateway's refusals of keys) for telling
+    // errors apart (see `crate::vibedev::api::upstream`).
+    crate::vibedev::api::upstream::ProviderError::new(status.as_u16(), body, message).into()
 }
 
 /// Finds the error message in the error body shapes that OpenAI-compatible providers use:

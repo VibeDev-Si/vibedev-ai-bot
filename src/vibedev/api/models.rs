@@ -42,8 +42,8 @@ pub async fn fetch(base_url: &BaseUrl, api_key: &ApiKey) -> Result<Vec<String>, 
         }
 
         if !status.is_success() {
-            let message = error_message(&body.bytes).unwrap_or_default();
-            let failure = upstream::classify_status(status.as_u16(), &message);
+            let failure =
+                upstream::classify_response(status.as_u16(), &String::from_utf8_lossy(&body.bytes));
 
             tracing::info!(
                 base_url = base_url.as_str(),
@@ -131,24 +131,10 @@ pub fn parse_models(body: &[u8]) -> Option<Vec<String>> {
     Some(models)
 }
 
-/// Finds the error message in the error body shapes OpenAI-compatible APIs use (only for classifying the error).
-fn error_message(body: &[u8]) -> Option<String> {
-    let body: serde_json::Value = serde_json::from_slice(body).ok()?;
-
-    [
-        &body["error"]["message"],
-        &body["error"],
-        &body["message"],
-        &body["detail"],
-    ]
-    .into_iter()
-    .find_map(|value| value.as_str())
-    .map(str::to_owned)
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{LimitedBody, MAX_MODELS, TooLarge, error_message, parse_models};
+    use super::{LimitedBody, MAX_MODELS, TooLarge, parse_models};
+    use crate::vibedev::api::upstream::error_message;
 
     #[test]
     fn model_lists_are_parsed_sorted_and_cleaned() {
@@ -195,13 +181,13 @@ mod tests {
     #[test]
     fn error_messages_are_found() {
         assert_eq!(
-            error_message(br#"{"error": {"message": "Invalid key"}}"#),
+            error_message(r#"{"error": {"message": "Invalid key"}}"#),
             Some("Invalid key".to_owned())
         );
         assert_eq!(
-            error_message(br#"{"detail": "Nope"}"#),
+            error_message(r#"{"detail": "Nope"}"#),
             Some("Nope".to_owned())
         );
-        assert_eq!(error_message(b"plain"), None);
+        assert_eq!(error_message("plain"), None);
     }
 }
