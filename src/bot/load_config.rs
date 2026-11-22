@@ -131,6 +131,10 @@ fn apply_env_overrides(
                     cfg_env::BAIBOT_INITIAL_GLOBAL_CONFIG_USER_PATTERNS_REMOVED,
                 ));
             }
+            // VibeDev fork: `BAIBOT_VIBEDEV_*` variables.
+            key if key.starts_with(crate::vibedev::config::ENV_PREFIX) => {
+                config.vibedev.apply_env_override(key, value)?;
+            }
             _ => {}
         }
     }

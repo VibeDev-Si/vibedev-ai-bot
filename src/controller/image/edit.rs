@@ -154,6 +154,9 @@ pub async fn handle(
         .await
         .map_err(|e| anyhow::anyhow!("Failed to upload and prepare event: {}", e))?;
 
+    // VibeDev fork: the "AI-generated" label as the image's caption.
+    crate::vibedev::label::label_media(&mut event_content);
+
     matrix_link
         .messaging()
         .send_event(

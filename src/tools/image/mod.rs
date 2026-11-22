@@ -178,6 +178,9 @@ async fn post_image(
         }
     };
 
+    // VibeDev fork: the "AI-generated" label as the image's caption.
+    crate::vibedev::label::label_media(&mut event_content);
+
     let response = match tokio::time::timeout_at(
         deadline,
         matrix_link.messaging().send_event(

@@ -114,7 +114,9 @@ pub async fn create_on_join_introduction(
 }
 
 pub fn create_short_introduction(name: &str) -> String {
-    its_me(name)
+    // VibeDev fork: AGPL-3.0 section 13 - users interacting over the network are offered the source code.
+    let source_code_notice = crate::vibedev::source_code_notice();
+    format!("{}\n\n{source_code_notice}", its_me(name))
 }
 
 fn make_use_of_me_simply_send_a_message(

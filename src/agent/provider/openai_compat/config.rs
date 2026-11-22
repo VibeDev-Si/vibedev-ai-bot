@@ -20,6 +20,11 @@ pub struct Config {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub image_generation: Option<ImageGenerationConfig>,
+
+    /// VibeDev fork: set on agents configured through the internal API (see `crate::vibedev::net`).
+    /// Their requests only go to public https addresses (every resolved address is checked), without redirects or proxies.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub public_network_only: bool,
 }
 
 impl Default for Config {
@@ -31,6 +36,7 @@ impl Default for Config {
             speech_to_text: Some(SpeechToTextConfig::default()),
             text_to_speech: Some(TextToSpeechConfig::default()),
             image_generation: Some(ImageGenerationConfig::default()),
+            public_network_only: false,
         }
     }
 }
@@ -39,6 +45,11 @@ impl ConfigTrait for Config {
     fn validate(&self) -> Result<(), String> {
         if self.base_url.is_empty() {
             return Err("The base URL must not be empty.".to_owned());
+        }
+
+        // VibeDev fork: IP addresses in URLs skip DNS resolution (and thus its checks), so they're checked here.
+        if self.public_network_only {
+            crate::vibedev::net::parse_base_url(&self.base_url).map_err(|err| err.to_string())?;
         }
 
         Ok(())

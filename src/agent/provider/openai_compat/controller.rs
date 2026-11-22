@@ -44,10 +44,18 @@ impl Controller {
     pub fn new(config: Config) -> Self {
         // Local models (e.g. LocalAI, Ollama) and image generation can be slow, so use a generous
         // timeout instead of reqwest's default (none). `build` only fails on TLS/system init.
-        let http = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(600))
-            .build()
-            .unwrap_or_else(|_| reqwest::Client::new());
+        let builder = reqwest::Client::builder().timeout(std::time::Duration::from_secs(600));
+
+        // VibeDev fork: keys are redacted from logs, and agents set up through the internal API
+        // only reach public addresses.
+        if let Some(api_key) = &config.api_key {
+            crate::vibedev::redact::register(api_key);
+        }
+        let http = if config.public_network_only {
+            crate::vibedev::net::hardened_client(builder)
+        } else {
+            builder.build().unwrap_or_else(|_| reqwest::Client::new())
+        };
 
         Self { config, http }
     }

@@ -6,7 +6,7 @@
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::fmt::format::FmtSpan;
 
-use baibot::{Bot, Config, load_config};
+use baibot::{Bot, Config, load_config, redacting_log_writer};
 
 /// Release builds receive their CalVer version at compile time; Cargo cannot represent it.
 const VERSION: &str = match option_env!("BAIBOT_VERSION") {
@@ -35,6 +35,8 @@ async fn run_with_config(config: Config) -> anyhow::Result<()> {
         .with_target(true)
         .with_span_events(FmtSpan::NONE)
         .with_env_filter(EnvFilter::new(config.logging.clone()))
+        // VibeDev fork: API keys are redacted from all log lines.
+        .with_writer(redacting_log_writer())
         .finish();
 
     tracing::subscriber::set_global_default(subscriber).expect("Failed setting global subscriber");

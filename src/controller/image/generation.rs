@@ -116,7 +116,10 @@ pub async fn handle_image(
         bot.messaging()
             .send_notice_markdown_no_fail(
                 message_context.room(),
-                strings::image_generation::revised_prompt(actual_prompt),
+                // VibeDev fork: the revised prompt is AI-generated.
+                crate::vibedev::label::label_text(&strings::image_generation::revised_prompt(
+                    actual_prompt,
+                )),
                 response_type.clone(),
             )
             .await;
@@ -137,6 +140,9 @@ pub async fn handle_image(
         )
         .await
         .map_err(|e| anyhow::anyhow!("Failed to upload and prepare event: {}", e))?;
+
+    // VibeDev fork: the "AI-generated" label as the image's caption.
+    crate::vibedev::label::label_media(&mut event_content);
 
     matrix_link
         .messaging()
@@ -242,6 +248,9 @@ pub async fn handle_sticker(
         )
         .await
         .map_err(|e| anyhow::anyhow!("Failed to upload and prepare event: {}", e))?;
+
+    // VibeDev fork: the "AI-generated" label as the image's caption.
+    crate::vibedev::label::label_media(&mut event_content);
 
     matrix_link
         .messaging()

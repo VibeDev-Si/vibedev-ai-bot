@@ -270,6 +270,11 @@ pub async fn process_matrix_messages(
 
         let mut message = message.clone();
 
+        // VibeDev fork: the "AI-generated" label on the bot's messages isn't part of the conversation.
+        if message.sender_id == params.bot_user_id {
+            crate::vibedev::label::strip_from_matrix_message(&mut message);
+        }
+
         if i == 0
             && !params.first_message_prefixes_to_strip.is_empty()
             && let MatrixMessageContent::Text(message_text) = &message.content

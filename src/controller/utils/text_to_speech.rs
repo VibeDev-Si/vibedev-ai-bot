@@ -82,6 +82,9 @@ async fn do_generate_and_send_tts_for_message(
         text_content
     };
 
+    // VibeDev fork: the "AI-generated" label of the bot's answers isn't read out.
+    let text_content = crate::vibedev::label::current().strip_from_text(text_content);
+
     let span = tracing::debug_span!(
         "text_to_speech_generation",
         agent_id = speech_agent.identifier().as_string()
@@ -147,6 +150,9 @@ async fn do_generate_and_send_tts_for_message(
             return false;
         }
     };
+
+    // VibeDev fork: the "AI-generated" label as the audio's caption.
+    crate::vibedev::label::label_media(&mut event_content);
 
     let result = matrix_link
         .messaging()

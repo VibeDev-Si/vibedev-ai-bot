@@ -915,6 +915,9 @@ async fn handle_stage_text_generation(
         return None;
     }
 
+    // VibeDev fork: answers carry the "AI-generated" label (text-to-speech gets the text without it).
+    let labeled_text = crate::vibedev::label::label_text(&text);
+
     // Finalize the answer into a single message. With a placeholder, edit it in place (so the
     // "thinking…" message becomes the answer); the TTS payload then points at that same event.
     // If the edit fails, fall back to a fresh send so the real answer is never lost.
@@ -922,7 +925,7 @@ async fn handle_stage_text_generation(
         Some(event_id)
             if bot
                 .messaging()
-                .edit_text_markdown_no_fail(message_context.room(), event_id, text.clone())
+                .edit_text_markdown_no_fail(message_context.room(), event_id, labeled_text.clone())
                 .await
                 .is_some() =>
         {
@@ -931,7 +934,11 @@ async fn handle_stage_text_generation(
         _ => {
             let sent = bot
                 .messaging()
-                .send_text_markdown_no_fail(message_context.room(), text.clone(), response_type)
+                .send_text_markdown_no_fail(
+                    message_context.room(),
+                    labeled_text.clone(),
+                    response_type,
+                )
                 .await
                 .map(|response| response.event_id);
 
@@ -940,7 +947,7 @@ async fn handle_stage_text_generation(
                 message_context,
                 placeholder_to_remove.clone(),
                 sent.is_some(),
-                &text,
+                &labeled_text,
             )
             .await;
 
@@ -1090,6 +1097,10 @@ async fn handle_stage_speech_to_text_actual_transcribing(
         } else {
             (speech_to_text_result.text, true)
         };
+
+    // VibeDev fork: transcriptions are AI-generated too (the label is removed again before
+    // they become conversation context).
+    let transcribed_text = crate::vibedev::label::label_text(&transcribed_text);
 
     let result = match msg_type {
         SpeechToTextMessageTypeForNonThreadedOnlyTranscribedMessages::Text => {

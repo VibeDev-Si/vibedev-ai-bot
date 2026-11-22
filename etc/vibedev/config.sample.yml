@@ -1,0 +1,100 @@
+# VibeDev AI 助手（基于 etkecc/baibot 修改，AGPL-3.0）的部署配置样例。
+#
+# - 把所有 __占位符__ 换成实际值。
+# - 密钥、口令一律不写进这个文件（保持 null），通过环境变量传入（变量名见各项注释，
+#   样例见 etc/vibedev/secrets.env.example）。不要把真实的密钥、口令或内部地址提交到任何仓库。
+# - 部署说明见 README 的「VibeDev changes」一节。
+
+homeserver:
+  # Matrix 的 server_name（用户 ID 冒号后面的部分），例如 matrix.example.com
+  server_name: __HOMESERVER_SERVER_NAME__
+  # 机器人访问 homeserver（Synapse）的地址，可以是容器内网地址
+  url: __HOMESERVER_URL__
+
+user:
+  # 机器人账号：@vibedev-ai:<server_name>（先在 Synapse 里注册这个账号）
+  mxid_localpart: vibedev-ai
+
+  # 账号口令：环境变量 BAIBOT_USER_PASSWORD
+  password: null
+
+  # 显示名，也是机器人提到自己时用的名字
+  name: VibeDev AI 助手
+
+  # keep：不改账号现有的头像（由运维在 Element 里设置）；null 会换成 baibot 的默认头像
+  avatar: keep
+
+  encryption:
+    # 加密密钥的备份/恢复口令：环境变量 BAIBOT_USER_ENCRYPTION_RECOVERY_PASSPHRASE
+    # 设定后不要再改，否则会读不到加密群里的历史消息。
+    recovery_passphrase: null
+    recovery_reset_allowed: false
+
+# 命令前缀（上游默认）。群里需要 @机器人 或以前缀开头，机器人才回复。
+command_prefix: "!bai"
+
+room:
+  # 加群后不发上游的英文自我介绍（它会引导用户在聊天里创建智能体，而这里由设置页配置）。
+  # 源代码链接仍在 `!bai help` 里（AGPL-3.0 第 13 条），设置页上也建议放一个。
+  post_join_self_introduction_enabled: false
+  catch_up_tolerance_seconds: 300
+
+access:
+  # 机器人管理员：拥有全部权限（包括在聊天里创建智能体、查看密钥）。
+  # 只填运维专用账号，绝不能填普通用户或通配所有人的模式。
+  admin_patterns:
+    - "@__OPS_ACCOUNT__:__HOMESERVER_SERVER_NAME__"
+
+persistence:
+  # 数据目录（会话和加密数据库），容器里挂载持久卷。也可用环境变量 BAIBOT_PERSISTENCE_DATA_DIR_PATH。
+  data_dir_path: /data
+
+  # 会话数据的加密密钥，64 位十六进制（openssl rand -hex 32）：
+  # 环境变量 BAIBOT_PERSISTENCE_SESSION_ENCRYPTION_KEY。更换后要清空数据目录。
+  session_encryption_key: null
+
+  # 配置加密密钥，64 位十六进制（openssl rand -hex 32）：环境变量 BAIBOT_PERSISTENCE_CONFIG_ENCRYPTION_KEY。
+  # 各群的配置（包括用户填的 API Key）加密后存在机器人账号的 Matrix account data 里。
+  # 必须设置并妥善备份：丢失或更换它，所有群的配置都会作废，需要重新填写。
+  config_encryption_key: null
+
+agents:
+  # 不做平台默认智能体：每个群的智能体由添加它的人在设置页填自己的 Key 创建。
+  static_definitions: []
+
+# 只在第一次启动（机器人账号还没有全局配置）时写入，之后改这里不再生效。
+initial_global_config:
+  handler:
+    catch_all: null
+    text_generation: null
+    text_to_speech: null
+    speech_to_text: null
+    image_generation: null
+
+  # 全局访问规则：本服用户可以把机器人邀请进群，此外不给任何人任何权限：
+  # 没有 use、manage-agents、manage-config、manage-access，所以没人能在聊天里创建智能体或改配置。
+  # 群里谁能使用助手，由内部接口按设置页的 access 写入本群规则（id 为 vibedev-assistant）。
+  access_rules:
+    - effect: allow
+      permissions: [invite]
+      users: ["@*:__HOMESERVER_SERVER_NAME__"]
+
+# 日志级别。不要对 baibot / mxlink 开 trace（会输出包含配置的调试信息）。
+logging: warn,mxlink=info,baibot=info
+
+vibedev:
+  internal_api:
+    # 内部配置接口的监听地址。只在容器内网可达：不要映射端口到宿主机或公网。
+    # 也可用环境变量 BAIBOT_VIBEDEV_INTERNAL_API_LISTEN_ADDRESS。留空则不启用接口。
+    listen_address: "0.0.0.0:9101"
+    # 共享密钥（至少 32 个字符，openssl rand -hex 32）：环境变量 BAIBOT_VIBEDEV_INTERNAL_API_SECRET
+    secret: null
+
+  # 「AI 生成」标识：文字回复开头（start）或结尾（end）单独一段；图片、语音的说明文字就是它。
+  # 可以改文字，不能去掉（留空即默认值）。
+  ai_label:
+    text: "【AI 生成】"
+    position: start
+
+  # 帮助信息里的源代码链接（AGPL-3.0 第 13 条）
+  source_code_url: https://github.com/VibeDev-Si/vibedev-ai-bot

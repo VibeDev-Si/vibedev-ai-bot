@@ -86,6 +86,9 @@ impl Bot {
         let admin_pattern_regexes = config.access.admin_pattern_regexes()?;
         let persistence_config_encryption_key = config.persistence.config_encryption_key()?;
 
+        // VibeDev fork: the "AI-generated" label and the source code link.
+        crate::vibedev::init(&config.vibedev);
+
         let agent_manager = AgentManager::new(config.agents.static_definitions.clone())?;
 
         let encryption_manager = EncryptionManager::new(persistence_config_encryption_key);
@@ -253,6 +256,9 @@ impl Bot {
         self.reacting().attach_event_handlers().await;
 
         self.inner.delayed_catch_up_marker_manager.start().await;
+
+        // VibeDev fork: the internal configuration API (if enabled).
+        crate::vibedev::start(self.clone(), &self.inner.config.vibedev).await?;
 
         self.prepare_profile().await?;
 

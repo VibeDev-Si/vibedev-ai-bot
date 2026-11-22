@@ -41,6 +41,10 @@ pub struct Config {
 
     #[serde(default = "super::defaults::logging")]
     pub logging: String,
+
+    /// VibeDev fork: the internal configuration API, the "AI-generated" label and the source code link.
+    #[serde(default)]
+    pub vibedev: crate::vibedev::VibeDevConfig,
 }
 
 impl Config {
@@ -60,6 +64,7 @@ impl Config {
 
         self.agents.validate()?;
         self.initial_global_config.clone().validate()?;
+        self.vibedev.validate()?;
 
         Ok(())
     }

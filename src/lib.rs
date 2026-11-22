@@ -13,6 +13,9 @@ mod entity;
 mod strings;
 mod tools;
 mod utils;
+// VibeDev fork: see the module's documentation.
+mod vibedev;
 
 pub use bot::{Bot, load_config};
 pub use entity::cfg::Config;
+pub use vibedev::redact::stdout as redacting_log_writer;
