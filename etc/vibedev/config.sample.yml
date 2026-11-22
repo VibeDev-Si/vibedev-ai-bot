@@ -40,10 +40,15 @@ room:
   catch_up_tolerance_seconds: 300
 
 access:
-  # 机器人管理员：拥有全部权限（包括在聊天里创建智能体、查看密钥）。
-  # 只填运维专用账号，绝不能填普通用户或通配所有人的模式。
+  # 机器人管理员。上游要求至少有一项（否则启动时报错），所以没法留空；这里默认填一个不可能存在的账号
+  # （.invalid 是保留域名，没有服务器能用它），相当于没有管理员。
+  #
+  # 即使填了真实账号，本 fork 里管理员也看不到用户的 Key：`agent details-revealing-secrets` 对所有人禁用，
+  # 发到群里的错误信息也会把 Key 打码。但管理员能在聊天里改全局设置和访问规则、创建全局智能体，
+  # 所以真要填，只填运维专用账号（例如 "@__OPS_ACCOUNT__:__HOMESERVER_SERVER_NAME__"），绝不能填普通用户或通配模式。
+  # 没有管理员时，需要调整全局访问规则就临时填上运维账号、重启，改完再换回来。
   admin_patterns:
-    - "@__OPS_ACCOUNT__:__HOMESERVER_SERVER_NAME__"
+    - "@nobody:admin.invalid"
 
 persistence:
   # 数据目录（会话和加密数据库），容器里挂载持久卷。也可用环境变量 BAIBOT_PERSISTENCE_DATA_DIR_PATH。

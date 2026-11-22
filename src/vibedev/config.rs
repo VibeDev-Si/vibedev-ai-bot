@@ -336,6 +336,17 @@ mod tests {
         for rule in &config.initial_global_config.access_rules {
             assert_eq!(rule.permissions, ["invite"]);
         }
+
+        // Upstream needs an administrator pattern; the sample's matches nobody (a reserved, unusable domain).
+        assert_eq!(config.access.admin_patterns, ["@nobody:admin.invalid"]);
+        let admins = config.access.admin_pattern_regexes().unwrap();
+        for user_id in [
+            "@admin:matrix.example.com",
+            "@nobody:example.com",
+            "@ops:admin.example",
+        ] {
+            assert!(!mxidwc::match_user_id(user_id, &admins), "{user_id}");
+        }
     }
 
     #[test]

@@ -630,6 +630,21 @@ fn apply(
     room_config.settings.text_generation.reply_style = Some(reply_style.into());
 }
 
+/// Forgets everything the API set up in a room the bot is no longer in (see `crate::vibedev::departure`):
+/// the agent with its API key, the handler setting, the access rule and the reply style.
+/// Returns whether there was anything to forget.
+pub fn forget(room_config: &mut RoomConfig) -> bool {
+    let removed = remove(room_config);
+    let reply_style_reset = room_config
+        .settings
+        .text_generation
+        .reply_style
+        .take()
+        .is_some();
+
+    removed || reply_style_reset
+}
+
 /// Removes the assistant (agent, handler setting and access rule), returning whether there was anything to remove.
 fn remove(room_config: &mut RoomConfig) -> bool {
     let agents_before = room_config.agents.len();

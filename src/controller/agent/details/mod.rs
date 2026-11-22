@@ -11,6 +11,19 @@ pub async fn handle(
     agent_identifier: &PublicIdentifier,
     reveal_secrets: bool,
 ) -> anyhow::Result<()> {
+    // VibeDev fork: secrets are never shown in chat, not even to administrators.
+    if let Some(refusal) = crate::vibedev::refuse_revealing_secrets(reveal_secrets) {
+        bot.messaging()
+            .send_error_markdown_no_fail(
+                message_context.room(),
+                refusal,
+                MessageResponseType::Reply(message_context.thread_info().root_event_id.clone()),
+            )
+            .await;
+
+        return Ok(());
+    }
+
     let agents = bot
         .agent_manager()
         .available_room_agents_by_room_config_context(message_context.room_config_context());

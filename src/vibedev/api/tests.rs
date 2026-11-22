@@ -1206,6 +1206,98 @@ async fn keys_never_reach_the_logs() {
     );
 }
 
+#[tokio::test]
+async fn leaving_the_room_forgets_the_assistant_and_its_key() {
+    let state = state(Fake::new());
+
+    let mut body = put_body(ADMIN, Some(KEY));
+    body["reply_style"] = json!("reply");
+    assert_eq!(put(&state, body).await.status, StatusCode::OK);
+
+    // Things the API didn't set up stay.
+    let other_agent = AgentDefinition::new(
+        "other".to_owned(),
+        crate::agent::AgentProvider::OpenAICompat,
+        serde_yaml_ng::Value::Null,
+    );
+    let mut room_config = state.backend.room_config.lock().unwrap().clone();
+    room_config.agents.push(other_agent);
+    let mut other_rule = access_rule(Access::Everyone);
+    other_rule.id = "other".to_owned();
+    room_config.access.rules.push(other_rule);
+    room_config.settings.text_generation.prompt_override = Some("Be brief.".to_owned());
+
+    // What gets saved (encrypted) in the room's account data contains the key...
+    assert!(serde_json::to_string(&room_config).unwrap().contains(KEY));
+
+    assert!(super::assistant::forget(&mut room_config));
+
+    // ...and no longer does once the bot has left.
+    let saved = serde_json::to_string(&room_config).unwrap();
+    assert!(!saved.contains(KEY), "{saved}");
+
+    assert_eq!(
+        room_config
+            .agents
+            .iter()
+            .map(|agent| agent.id.as_str())
+            .collect::<Vec<_>>(),
+        ["other"]
+    );
+    assert_eq!(
+        room_config
+            .settings
+            .handler
+            .get_by_purpose(AgentPurpose::TextGeneration),
+        None
+    );
+    assert_eq!(
+        room_config
+            .access
+            .rules
+            .iter()
+            .map(|rule| rule.id.as_str())
+            .collect::<Vec<_>>(),
+        ["other"]
+    );
+    assert_eq!(room_config.settings.text_generation.reply_style, None);
+    assert_eq!(
+        room_config
+            .settings
+            .text_generation
+            .prompt_override
+            .as_deref(),
+        Some("Be brief.")
+    );
+
+    // Nothing left to forget (so nothing gets saved again).
+    assert!(!super::assistant::forget(&mut room_config));
+    assert!(!super::assistant::forget(&mut RoomConfig::default()));
+}
+
+#[test]
+fn error_messages_posted_in_rooms_hide_keys() {
+    let key = "sk-test-error-message-0123456789";
+    redact::register(key);
+
+    let message = crate::strings::agent::error_while_serving_purpose(
+        &PublicIdentifier::DynamicRoomLocal(AGENT_ID.to_owned()),
+        &AgentPurpose::TextGeneration,
+        format!(
+            "The OpenAI-compat chat completion API request failed (401 Unauthorized): Incorrect API key provided: {key}"
+        ),
+    );
+
+    assert!(!message.contains(key), "{message}");
+    assert!(message.contains(redact::REDACTED), "{message}");
+    assert!(message.contains("401 Unauthorized"), "{message}");
+
+    let message = crate::strings::agent::configuration_does_not_result_in_a_working_agent(
+        anyhow::anyhow!("Invalid key: {key}"),
+    );
+    assert!(!message.contains(key), "{message}");
+}
+
 #[test]
 fn requests_hide_keys_in_debug_output() {
     let request: PutAssistantRequest = serde_json::from_value(put_body(ADMIN, Some(KEY))).unwrap();

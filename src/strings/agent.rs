@@ -45,7 +45,8 @@ pub fn not_allowed_to_manage_static_agents() -> String {
 pub fn configuration_does_not_result_in_a_working_agent(err: anyhow::Error) -> String {
     format!(
         "The provided configuration does not result in a working agent. The following error was encountered when trying to talk to the agent API:\n```\n{}\n```",
-        err,
+        // VibeDev fork: API keys echoed by the provider aren't posted in the room.
+        crate::vibedev::redact::redact(&err.to_string(), &[]),
     )
 }
 
@@ -297,7 +298,8 @@ pub fn error_while_serving_purpose(
         "There was a problem performing {} via the `{}` agent:\n\n{}",
         purpose,
         agent_identifier,
-        block_quote(&err.to_string())
+        // VibeDev fork: API keys echoed by the provider aren't posted in the room.
+        block_quote(&crate::vibedev::redact::redact(&err.to_string(), &[]))
     )
 }
 

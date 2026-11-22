@@ -102,6 +102,11 @@ When updating the bot, refer to the [GitHub releases](https://github.com/etkecc/
 7. **依赖**：`hyper`（http1 + server）、`hyper-util`、`http-body-util`、`subtle`，都已在上游依赖树中；`Cargo.lock` 只新增 `httpdate`（hyper 的 server 功能需要）。tokio 增加 `net` 功能。
 8. **禁止在聊天里创建智能体：没有改代码。** 上游的 `agent create-room-local` 需要 `manage-agents` 权限，`create-global` 只有机器人管理员能用。部署配置里的全局访问规则只给本服用户 `invite`（邀请机器人进群），不给任何人 `use`、`manage-agents`、`manage-config`、`manage-access`；每个群谁能使用助手，由内部接口写入的本群规则决定（只授予 `text-generation`）。
 9. 其他行为保持上游默认：群里要 @ 机器人或以命令前缀开头才回复（成员 ≤ 2 人的房间不需要）、话题串等；每个群的回复方式由接口的 `reply_style` 设置。
+10. **机器人离开群时立即删除该群的助手配置**（[`src/vibedev/departure.rs`](./src/vibedev/departure.rs)，2026-11-23 补充）：机器人自己的成员状态变成 `leave` 或 `ban`（被踢、被封禁、群被关闭，或它自己退出）时，马上从该群配置里删除智能体 `vibedev-assistant`（连同加密保存的 Key）、指向它的 text-generation 处理者设置、访问规则 `vibedev-assistant` 和 `reply_style`，并写回 Matrix account data（Synapse 允许给已经不在的群写 account data）；别人设置的其他内容不动。写入失败会重试 3 次；机器人每次启动时还会把所有已离开/被封禁的群再检查一遍。不需要任何配置，没有改上游文件（处理器在 `vibedev::start` 里注册）。
+11. **没人能在聊天里看到 Key**（2026-11-23 补充）：上游要求至少有一个机器人管理员（`access.admin_patterns` 为空时拒绝启动），所以管理员列表不能真的设成空；配置样例默认填一个不可能存在的账号 `@nobody:admin.invalid`，相当于没有管理员。同时在代码里：
+    - `agent details-revealing-secrets` 对所有人（包括管理员）禁用，只回复一条说明（挂接点：[`controller/agent/details/mod.rs`](./src/controller/agent/details/mod.rs)）。`agent details` 照常可用，Key 显示为 `REDACTED`。
+    - 智能体出错时发到群里的错误信息会把已登记的 Key 打码（服务商的错误信息可能带着 Key）（挂接点：[`strings/agent.rs`](./src/strings/agent.rs)）。
+    - 影响：任何人都无法在聊天里查看任何智能体（包括全局、静态智能体）的 Key；上游建议的「先 `details-revealing-secrets` 再删除重建」来修改智能体配置的做法不再可行，重建时要自己重新填 Key；AI 助手的 Key 只能在设置页重新填写来更换。帮助文字里仍列出这个命令，但执行会被拒绝。
 
 部署材料：配置样例 [`etc/vibedev/config.sample.yml`](./etc/vibedev/config.sample.yml)，密钥环境变量样例 [`etc/vibedev/secrets.env.example`](./etc/vibedev/secrets.env.example)（都只有占位符）。
 
@@ -146,7 +151,7 @@ When updating the bot, refer to the [GitHub releases](https://github.com/etkecc/
 {"configured": true, "joined": true}
 ```
 
-机器人不在群里时，无论是谁都返回 `{"configured": false, "joined": false}`（读不到可信的群状态；机器人被重新邀请时上游也会重置该群配置）。
+机器人不在群里时，无论是谁都返回 `{"configured": false, "joined": false}`（读不到可信的群状态；而且机器人离开群时已经删除了该群的配置，见改动一览第 10 条）。
 
 #### 2. `PUT /_vibedev/v1/rooms/{room_id}/assistant`
 
@@ -232,7 +237,7 @@ When updating the bot, refer to the [GitHub releases](https://github.com/etkecc/
 
    `BAIBOT_VERSION` 只是写进 `baibot --version` 的版本号。
 
-2. **准备账号**：在 Synapse 上注册普通用户 `vibedev-ai`（例如 `register_new_matrix_user`，不需要管理员）；再准备一个运维账号填进 `access.admin_patterns`。
+2. **准备账号**：在 Synapse 上注册普通用户 `vibedev-ai`（例如 `register_new_matrix_user`，不需要管理员）。`access.admin_patterns` 默认是不可能存在的账号（相当于没有机器人管理员），一般不用改。
 
 3. **配置**：复制 [`etc/vibedev/config.sample.yml`](./etc/vibedev/config.sample.yml) 到服务器（例如 `/srv/vibedev-ai-bot/config.yml`），替换占位符；复制 [`etc/vibedev/secrets.env.example`](./etc/vibedev/secrets.env.example) 为 `secrets.env`（权限 600）并填写。`config_encryption_key` 必须设置并备份：各群的配置（包括 Key）都用它加密，丢了就要重新配置所有群。
 
@@ -251,14 +256,16 @@ When updating the bot, refer to the [GitHub releases](https://github.com/etkecc/
 
 注意：
 
-- 访问规则：`initial_global_config` 只在机器人账号第一次启动时写入。账号已有全局配置时改 YAML 无效，需要运维账号在聊天里用 `!bai access` 调整。不要给任何人 `manage-agents` / `manage-config` / `manage-access`。
-- 机器人管理员（`admin_patterns`）可以做任何事，包括 `!bai agent details-revealing-secrets` 在聊天里显示 Key，只给运维账号。
+- 访问规则：`initial_global_config` 只在机器人账号第一次启动时写入。账号已有全局配置时改 YAML 无效，需要机器人管理员在聊天里用 `!bai access` 调整：临时把运维账号填进 `admin_patterns`、重启，改完再换回不可能存在的账号。不要给任何人 `manage-agents` / `manage-config` / `manage-access`。
+- 机器人管理员（如果填了真实账号）能改全局设置、访问规则、创建全局智能体，但看不到用户的 Key（`details-revealing-secrets` 已禁用，群里的错误信息会打码）。只填运维专用账号。
 - 日志：不要对 `baibot` / `mxlink` 开 `trace` 级别。
-- 机器人被移出群后再被邀请回来，上游会把该群配置重置，需要在设置页重新配置。
+- 机器人被移出群（被踢、被封禁、群被关闭）时，该群的助手配置和 Key 会立即删除；再被邀请回来需要在设置页重新配置。可以在测试站把机器人踢出群，日志里应出现 `Forgot the VibeDev assistant (and its API key) of a room the bot is no longer in`。
 
 ### 已知限制
 
-- Key 加密后存放在机器人账号的 Matrix account data 里（`config_encryption_key`）；拿到机器人账号和该密钥的人可以解密。机器人被移出群后，该群配置在下次加群重置之前仍然留着（这期间接口读不到，也删不掉）。
+- Key 加密后存放在机器人账号的 Matrix account data 里（`config_encryption_key`）；拿到机器人账号和该密钥的人可以解密（这是服务器层面的访问，聊天里看不到）。
+- 离开群后的清理靠机器人同步到自己的离开事件；如果当时 homeserver 写入一直失败（重试 3 次），要等机器人下次启动时的检查才会删掉。Synapse 自身的数据库备份里可能还留有旧的（加密的）配置。
+- 管理员列表因为上游的启动检查不能为空，只能填一个不可能存在的账号来达到同样效果。
 - 内部接口本身没有 TLS 和限流，依赖内网隔离和共享密钥。
 - 群管理员身份读自机器人同步到的群状态，可能比实际变化晚几秒。
 - 「模型不存在」和「Key 无效」（非 401/403 时）是根据模型服务错误说明里的关键词判断的，判断不了时归为 `VD_UPSTREAM_ERROR`。
